@@ -10,7 +10,7 @@ Aplicación nativa para macOS que analiza cachés, revisa instaladores y optimiz
 
 ## Instalar
 
-1. Descarga `Aire-Disco-1.0.0-macOS.zip` desde **Releases** y descomprímelo.
+1. Descarga `Aire-Disco-1.0-macOS.zip` desde **Releases** y descomprímelo.
 2. Arrastra **Aire Disco.app** a **Aplicaciones** y ábrela.
 3. En **Limpieza**, elige categorías y pulsa **Analizar**. Revisa el resultado antes de pulsar **Limpiar cachés**.
 
