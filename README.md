@@ -10,7 +10,7 @@ Aplicación nativa para macOS que analiza cachés, revisa instaladores y optimiz
 
 ## Instalar
 
-1. Descarga `Aire-Disco-1.0-macOS.zip` desde **Releases** y descomprímelo.
+1. Descarga `Aire-Disco-1.1-macOS.zip` desde **Releases** y descomprímelo.
 2. Arrastra **Aire Disco.app** a **Aplicaciones** y ábrela.
 3. En **Limpieza**, elige categorías y pulsa **Analizar**. Revisa el resultado antes de pulsar **Limpiar cachés**.
 
@@ -30,9 +30,9 @@ La versión incluye `SHA256SUMS.txt`. Si descargas ese archivo junto con el ZIP,
 
 Para usar la automatización, configura las categorías desde **Limpieza** y activa la opción en **Automático**. Los valores iniciales son 8 GB de umbral, 6 horas entre operaciones y cachés de al menos 2 días. La app revisa el espacio una vez por minuto mientras está en ejecución y permanece en la barra de menús si cierras la ventana. Puedes elegir **Abrir al iniciar sesión** para volver a abrirla al entrar al Mac. Tanto el inicio de sesión como la limpieza automática requieren activación desde la app.
 
-## Qué se protege
+## Alcance de la limpieza
 
-- La automatización se limita a una lista de ubicaciones de caché. La lista excluye Claude Code y sus carpetas de datos.
+- La automatización se limita a las ubicaciones de caché de las categorías activas.
 - Los instaladores se presentan para selección manual. Su eliminación es definitiva y requiere confirmación en la app.
 - Para optimizar copias, elige dos carpetas distintas de tu usuario, en el mismo volumen APFS. La comparación omite archivos que solo están en la nube, enlaces múltiples, paquetes de aplicaciones y bibliotecas multimedia. Las dos rutas se conservan y las ediciones siguen siendo independientes. [Cómo funcionan los clones APFS](https://developer.apple.com/documentation/foundation/about-apple-file-system).
 - macOS puede pedir acceso a Descargas o a las carpetas que elijas. Los permisos se conceden desde macOS y el análisis de cachés sigue disponible aunque Descargas no esté accesible.

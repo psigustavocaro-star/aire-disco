@@ -181,7 +181,7 @@ final class Cleaner: ObservableObject {
     func findDuplicates() {
         guard busy == nil, let reference, let copies else { return }
         clearMatches()
-        busy = "Comparando tamaños y huellas SHA-256…"
+        busy = "Comparando archivos…"
         let engine = self.engine
         let minimum = preferences.minimumMiB
         let known = optimized
@@ -243,11 +243,16 @@ final class Cleaner: ObservableObject {
     }
 }
 
-let ink = Color(red: 0.045, green: 0.074, blue: 0.120)
-let sidebarInk = Color(red: 0.060, green: 0.100, blue: 0.154)
-let panelInk = Color(red: 0.085, green: 0.130, blue: 0.195)
-let mint = Color(red: 0.45, green: 0.95, blue: 0.76)
-let mist = Color(red: 0.63, green: 0.71, blue: 0.81)
+let windowBackground = Color(nsColor: .windowBackgroundColor)
+let panelBackground = Color(nsColor: .controlBackgroundColor)
+let separator = Color(nsColor: .separatorColor)
+let secondaryInk = Color(nsColor: .secondaryLabelColor)
+let accent = Color(nsColor: NSColor(name: nil) { appearance in
+    if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+        return NSColor(srgbRed: 0.42, green: 0.83, blue: 0.73, alpha: 1)
+    }
+    return NSColor(srgbRed: 0.04, green: 0.46, blue: 0.41, alpha: 1)
+})
 
 func quantity(_ bytes: Int64) -> String {
     let f = ByteCountFormatter()
@@ -262,27 +267,13 @@ func deltaText(_ value: Int64) -> String {
     return "0 KB"
 }
 
-struct ActionStyle: ButtonStyle {
-    var primary = false
-    @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 15).padding(.vertical, 10)
-            .foregroundStyle(primary ? ink : Color.white)
-            .background(primary ? mint : Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(primary ? 0 : 0.10)))
-            .opacity(enabled ? (configuration.isPressed ? 0.73 : 1) : 0.36)
-    }
-}
-
 struct Card<Content: View>: View {
     let content: Content
     init(@ViewBuilder _ content: () -> Content) { self.content = content() }
     var body: some View {
-        content.padding(19).frame(maxWidth: .infinity, alignment: .leading)
-            .background(panelInk, in: RoundedRectangle(cornerRadius: 17))
-            .overlay(RoundedRectangle(cornerRadius: 17).strokeBorder(.white.opacity(0.07)))
+        content.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            .background(panelBackground, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(separator.opacity(0.42)))
     }
 }
 
@@ -293,7 +284,7 @@ struct Logo: View {
             Image(nsImage: icon).resizable().interpolation(.high).scaledToFit().frame(width: size, height: size)
                 .accessibilityHidden(true)
         } else {
-            Image(systemName: "internaldrive.fill").font(.system(size: size * 0.5)).foregroundStyle(mint)
+            Image(systemName: "internaldrive.fill").font(.system(size: size * 0.5)).foregroundStyle(accent)
                 .frame(width: size, height: size).accessibilityHidden(true)
         }
     }
@@ -327,7 +318,7 @@ struct MainWindow: View {
                         Spacer()
                     }
                     .padding(.horizontal, 27).padding(.vertical, 10)
-                    .background(mint.opacity(0.10))
+                    .background(accent.opacity(0.10))
                     .accessibilityElement(children: .combine)
                 }
                 ScrollView {
@@ -347,11 +338,9 @@ struct MainWindow: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(ink)
-        .preferredColorScheme(.dark)
-        .tint(mint)
-        .foregroundStyle(Color.white)
-        .frame(minWidth: 880, minHeight: 610)
+        .background(windowBackground)
+        .tint(accent)
+        .frame(minWidth: 850, minHeight: 560)
         .onChange(of: phase) { _, value in if value == .active { model.refresh() } }
         .alert(item: $confirm) { item in
             switch item {
@@ -370,13 +359,10 @@ struct MainWindow: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 8) {
-                Logo(size: 46)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Aire Disco").font(.system(size: 17, weight: .bold))
-                    Text("ALMACENAMIENTO").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundStyle(mist)
-                }
-            }.padding(.bottom, 24)
+            HStack(spacing: 9) {
+                Logo(size: 35)
+                Text("Aire Disco").font(.system(size: 16, weight: .semibold))
+            }.padding(.bottom, 17)
             ForEach(Page.allCases) { page in
                 Button {
                     model.page = page
@@ -388,51 +374,49 @@ struct MainWindow: View {
                     }
                     .font(.system(size: 13, weight: model.page == page ? .semibold : .medium))
                     .padding(.horizontal, 11).padding(.vertical, 10)
-                    .background(model.page == page ? mint.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 9))
-                    .foregroundStyle(model.page == page ? mint : mist)
+                    .background(model.page == page ? accent.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                    .foregroundStyle(model.page == page ? accent : secondaryInk)
                     .contentShape(Rectangle())
                 }.buttonStyle(.plain)
                 .accessibilityAddTraits(model.page == page ? .isSelected : [])
             }
             Spacer()
-            HStack(spacing: 7) {
-                Image(systemName: "lock.shield")
-                Text("Claude Code protegido")
-            }.font(.system(size: 11, weight: .medium)).foregroundStyle(mist)
         }
         .padding(.horizontal, 16).padding(.vertical, 23)
-        .frame(width: 196)
+        .frame(width: 187)
         .frame(maxHeight: .infinity)
-        .background(sidebarInk)
+        .background(.regularMaterial)
     }
 
-    private func heading(_ kicker: String, _ title: String, _ description: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(kicker).font(.system(size: 10, weight: .bold)).tracking(1.8).foregroundStyle(mint)
-            Text(title).font(.system(size: 28, weight: .bold))
-            Text(description).font(.system(size: 13)).foregroundStyle(mist).fixedSize(horizontal: false, vertical: true)
+    private func heading(_ title: String, _ description: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.system(size: 26, weight: .semibold))
+            Text(description).font(.system(size: 13)).foregroundStyle(secondaryInk).fixedSize(horizontal: false, vertical: true)
         }.padding(.bottom, 2)
     }
 
     private var overview: some View {
         Group {
-            heading("ESTADO DEL MAC", "Espacio disponible", "Revisa cuánto margen tiene el disco y elige cómo recuperarlo.")
+            heading("Almacenamiento", "Espacio disponible en el volumen de tu usuario.")
             spaceCard
-            HStack(spacing: 12) {
-                feature("sparkles", "Limpieza segura", "Revisa cachés e instaladores detectados.", .cleanup)
-                feature("square.on.square", "Copias idénticas", "Ahorra espacio conservando cada ruta.", .duplicates)
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    shortcut("sparkle.magnifyingglass", "Revisar cachés e instaladores", .cleanup)
+                    Divider()
+                    shortcut("square.on.square", "Comparar carpetas", .duplicates)
+                }
             }
             Card {
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 22)).foregroundStyle(mint)
+                HStack(alignment: .center, spacing: 11) {
+                    Image(systemName: "clock").font(.system(size: 17)).foregroundStyle(secondaryInk).frame(width: 24)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(model.preferences.automatic ? "Limpieza automática activada" : "Limpieza automática pausada").font(.headline)
+                        Text("Limpieza automática").font(.system(size: 13, weight: .semibold))
                         Text(model.preferences.automatic
-                            ? "Umbral de \(model.preferences.threshold) GB · intervalo de \(model.preferences.interval) h"
-                            : "Puedes activarla y elegir un umbral de espacio.").font(.system(size: 12)).foregroundStyle(mist)
+                            ? "Activada · Umbral de \(model.preferences.threshold) GB · Intervalo mínimo de \(model.preferences.interval) h"
+                            : "Desactivada").font(.system(size: 12)).foregroundStyle(secondaryInk)
                     }
                     Spacer()
-                    Button("Configurar") { model.page = .automatic }.buttonStyle(ActionStyle())
+                    Button("Configurar") { model.page = .automatic }.buttonStyle(.bordered)
                 }
             }
         }
@@ -440,62 +424,57 @@ struct MainWindow: View {
 
     private var spaceCard: some View {
         let ratio = model.space.capacity > 0 ? max(0, min(1, Double(model.space.free) / Double(model.space.capacity))) : 0
-        return VStack(alignment: .leading, spacing: 13) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(model.space.capacity == 0 ? "Sin lectura" : quantity(model.space.free))
-                        .font(.system(size: 48, weight: .bold, design: .rounded)).tracking(-2).monospacedDigit()
-                    Text("LIBRES EN EL VOLUMEN DEL USUARIO").font(.system(size: 10, weight: .semibold)).tracking(1.2).foregroundStyle(mist)
+        return Card {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.space.capacity == 0 ? "Lectura no disponible" : quantity(model.space.free))
+                            .font(.system(size: 39, weight: .semibold)).monospacedDigit()
+                        Text("Disponibles de \(quantity(model.space.capacity))").font(.system(size: 12)).foregroundStyle(secondaryInk)
+                    }
+                    Spacer()
+                    Button { model.refresh() } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }.buttonStyle(.bordered).help("Actualizar espacio disponible").accessibilityLabel("Actualizar espacio disponible")
                 }
-                Spacer()
-                Logo(size: 98)
-            }
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.17))
-                    Capsule().fill(mint).frame(width: model.space.free > 0 ? max(4, ratio * proxy.size.width) : 0)
-                }
-            }.frame(height: 6).accessibilityHidden(true)
-            HStack {
-                Text("Capacidad: \(quantity(model.space.capacity))").font(.system(size: 12)).foregroundStyle(mist)
-                Spacer()
-                Button { model.refresh() } label: { Label("Actualizar", systemImage: "arrow.clockwise") }.buttonStyle(ActionStyle())
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(separator.opacity(0.45))
+                        Capsule().fill(accent).frame(width: model.space.free > 0 ? max(4, ratio * proxy.size.width) : 0)
+                    }
+                }.frame(height: 5).accessibilityHidden(true)
             }
         }
-        .padding(22)
-        .background(LinearGradient(colors: [Color(red: 0.10, green: 0.24, blue: 0.32), panelInk], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 19))
-        .overlay(RoundedRectangle(cornerRadius: 19).strokeBorder(mint.opacity(0.16)))
     }
 
-    private func feature(_ icon: String, _ title: String, _ detail: String, _ page: Page) -> some View {
+    private func shortcut(_ icon: String, _ title: String, _ page: Page) -> some View {
         Button {
             model.page = page
         } label: {
-            Card {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: icon).font(.system(size: 20)).foregroundStyle(mint)
-                    HStack { Text(title).font(.headline); Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(mist) }
-                    Text(detail).font(.system(size: 12)).foregroundStyle(mist).fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            HStack(spacing: 11) {
+                Image(systemName: icon).font(.system(size: 16)).foregroundStyle(accent).frame(width: 24)
+                Text(title).font(.system(size: 13, weight: .medium))
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(secondaryInk)
+            }.contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
 
     private var cleanup: some View {
         Group {
-            heading("CACHÉS E INSTALADORES", "Limpieza", "Selecciona categorías y revisa el espacio que ocupan sus archivos.")
+            heading("Limpieza", "Analiza las categorías seleccionadas y revisa los resultados.")
             Card {
                 VStack(alignment: .leading, spacing: 11) {
                     ForEach(CacheKind.allCases) { kind in
                         HStack(spacing: 10) {
-                            Image(systemName: kind.icon).foregroundStyle(mint).frame(width: 22)
+                            Image(systemName: kind.icon).foregroundStyle(accent).frame(width: 22)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(kind.title).font(.system(size: 13, weight: .semibold))
-                                Text(kind.details).font(.system(size: 11)).foregroundStyle(mist)
+                                Text(kind.details).font(.system(size: 11)).foregroundStyle(secondaryInk)
                             }
                             Spacer()
                             if let group = model.cacheScan?.groups.first(where: { $0.kind == kind }) {
-                                Text(quantity(group.bytes)).font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundStyle(mist)
+                                Text(quantity(group.bytes)).font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundStyle(secondaryInk)
                             }
                             Toggle(kind.title, isOn: Binding(get: { model.preferences.kinds.contains(kind) }, set: {
                                 if $0 { model.preferences.kinds.insert(kind) } else { model.preferences.kinds.remove(kind) }
@@ -512,34 +491,34 @@ struct MainWindow: View {
                             Text("7 días").tag(168)
                         }.fixedSize().onChange(of: model.preferences.manualHours) { _, _ in model.invalidateCaches() }
                         Spacer()
-                        Button("Analizar") { model.analyze() }.buttonStyle(ActionStyle())
-                        Button("Limpiar cachés") { confirm = .caches }.buttonStyle(ActionStyle(primary: true))
+                        Button("Analizar") { model.analyze() }.buttonStyle(.bordered)
+                        Button("Limpiar cachés") { confirm = .caches }.buttonStyle(.borderedProminent)
                             .disabled(!(model.cacheScan?.groups.contains { !$0.files.isEmpty } ?? false))
                     }
                     if let scan = model.cacheScan {
                         let logical = scan.groups.reduce(0) { $0 + $1.bytes }
                         Text("\(quantity(logical)) de caché detectada. El espacio recuperado se mide en el volumen.")
-                            .font(.system(size: 11)).foregroundStyle(mist)
+                            .font(.system(size: 11)).foregroundStyle(secondaryInk)
                     }
                 }
             }.disabled(model.busy != nil)
             if let scan = model.cacheScan {
                 Card {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Instaladores para revisar").font(.headline)
+                        Text("Instaladores").font(.headline)
                         if scan.installers.isEmpty {
-                            Text("No se detectaron instaladores antiguos que cumplan los criterios.").foregroundStyle(mist).font(.system(size: 12))
+                            Text("Sin instaladores pendientes de revisión.").foregroundStyle(secondaryInk).font(.system(size: 12))
                         }
                         ForEach(scan.installers) { item in
                             HStack {
                                 Toggle(isOn: membership(item.id, $model.pickedInstallers)) {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(item.url.lastPathComponent).lineLimit(1).truncationMode(.middle)
-                                        Text(item.kind.rawValue).font(.caption).foregroundStyle(mist)
+                                        Text(item.kind.rawValue).font(.caption).foregroundStyle(secondaryInk)
                                     }
                                 }.toggleStyle(.checkbox)
                                 Spacer()
-                                Text(quantity(item.allocated)).font(.caption).foregroundStyle(mist)
+                                Text(quantity(item.allocated)).font(.caption).foregroundStyle(secondaryInk)
                                 Button { NSWorkspace.shared.activateFileViewerSelecting([item.url]) } label: {
                                     Image(systemName: "folder")
                                 }.buttonStyle(.borderless).help("Mostrar en Finder").accessibilityLabel("Mostrar en Finder")
@@ -547,7 +526,7 @@ struct MainWindow: View {
                         }
                         ForEach(scan.notes, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
                         if !scan.installers.isEmpty {
-                            Button("Eliminar seleccionados…") { confirm = .installers }.buttonStyle(ActionStyle())
+                            Button("Eliminar seleccionados…") { confirm = .installers }.buttonStyle(.bordered)
                                 .disabled(model.pickedInstallers.isEmpty)
                         }
                     }
@@ -558,7 +537,7 @@ struct MainWindow: View {
 
     private var duplicates: some View {
         Group {
-            heading("COMPARACIÓN EXACTA", "Copias idénticas", "Compara dos carpetas locales. Las copias verificadas pueden compartir espacio en APFS y conservar sus rutas.")
+            heading("Copias idénticas", "Compara dos carpetas del mismo volumen y conserva ambas rutas.")
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     folderLine("Referencia", "Se usa para comparar el contenido.", model.reference, true)
@@ -573,7 +552,7 @@ struct MainWindow: View {
                             Text("50 MB").tag(50)
                         }.fixedSize().onChange(of: model.preferences.minimumMiB) { _, _ in model.clearMatches() }
                         Spacer()
-                        Button("Comparar carpetas") { model.findDuplicates() }.buttonStyle(ActionStyle(primary: true))
+                        Button("Comparar carpetas") { model.findDuplicates() }.buttonStyle(.borderedProminent)
                             .disabled(model.reference == nil || model.copies == nil)
                     }
                 }
@@ -588,10 +567,10 @@ struct MainWindow: View {
                                 Button(model.pickedCopies.count == model.matches.count ? "Quitar selección" : "Seleccionar todas") {
                                     if model.pickedCopies.count == model.matches.count { model.pickedCopies.removeAll() }
                                     else { model.pickedCopies = Set(model.matches.map(\.id)) }
-                                }.buttonStyle(ActionStyle())
+                                }.buttonStyle(.bordered)
                             }
                         }
-                        if model.matches.isEmpty { Text("No hay copias pendientes que cumplan los criterios.").font(.caption).foregroundStyle(mist) }
+                        if model.matches.isEmpty { Text("Sin copias pendientes de optimización.").font(.caption).foregroundStyle(secondaryInk) }
                         if !model.matches.isEmpty {
                             ScrollView {
                                 LazyVStack(alignment: .leading, spacing: 9) {
@@ -600,12 +579,12 @@ struct MainWindow: View {
                                             Toggle(isOn: membership(pair.id, $model.pickedCopies)) {
                                                 VStack(alignment: .leading, spacing: 3) {
                                                     Text(pair.target.lastPathComponent).lineLimit(1).truncationMode(.middle)
-                                                    Text(pair.target.deletingLastPathComponent().path).font(.caption2).foregroundStyle(mist).lineLimit(1).truncationMode(.head)
+                                                    Text(pair.target.deletingLastPathComponent().path).font(.caption2).foregroundStyle(secondaryInk).lineLimit(1).truncationMode(.head)
                                                 }
                                             }.toggleStyle(.checkbox)
                                             .help("Referencia: \(pair.source.path)")
                                             Spacer()
-                                            Text(quantity(pair.bytes)).font(.caption).foregroundStyle(mist)
+                                            Text(quantity(pair.bytes)).font(.caption).foregroundStyle(secondaryInk)
                                             Button { NSWorkspace.shared.activateFileViewerSelecting([pair.target]) } label: {
                                                 Image(systemName: "folder")
                                             }.buttonStyle(.borderless).help("Mostrar copia en Finder").accessibilityLabel("Mostrar copia en Finder")
@@ -615,9 +594,9 @@ struct MainWindow: View {
                             }.frame(height: min(260, CGFloat(model.matches.count) * 40 + 6))
                             HStack {
                                 Text("Tamaño lógico seleccionado: \(quantity(model.matches.filter { model.pickedCopies.contains($0.id) }.reduce(0) { $0 + $1.bytes }))")
-                                    .font(.caption).foregroundStyle(mist)
+                                    .font(.caption).foregroundStyle(secondaryInk)
                                 Spacer()
-                                Button("Optimizar seleccionadas…") { confirm = .duplicates }.buttonStyle(ActionStyle(primary: true))
+                                Button("Optimizar selección…") { confirm = .duplicates }.buttonStyle(.borderedProminent)
                                     .disabled(model.pickedCopies.isEmpty)
                             }
                         }
@@ -629,20 +608,20 @@ struct MainWindow: View {
 
     private func folderLine(_ label: String, _ detail: String, _ folder: URL?, _ isReference: Bool) -> some View {
         HStack(spacing: 11) {
-            Image(systemName: isReference ? "folder" : "folder.badge.gearshape").foregroundStyle(mint).frame(width: 23)
+            Image(systemName: isReference ? "folder" : "folder.badge.gearshape").foregroundStyle(accent).frame(width: 23)
             VStack(alignment: .leading, spacing: 3) {
                 Text(label).font(.system(size: 13, weight: .semibold))
-                Text(folder?.path ?? detail).font(.caption).foregroundStyle(mist).lineLimit(1).truncationMode(.head)
+                Text(folder?.path ?? detail).font(.caption).foregroundStyle(secondaryInk).lineLimit(1).truncationMode(.head)
             }
             Spacer()
-            Button("Elegir…") { model.chooseFolder(isReference: isReference) }.buttonStyle(ActionStyle())
+            Button("Elegir…") { model.chooseFolder(isReference: isReference) }.buttonStyle(.bordered)
                 .accessibilityLabel("Elegir carpeta de \(label.lowercased())")
         }
     }
 
     private var automatic: some View {
         Group {
-            heading("MANTENIMIENTO", "Limpieza automática", "Aire Disco revisa el volumen cada minuto mientras está abierto. Puedes dejarlo en la barra de menús.")
+            heading("Limpieza automática", "Configura cuándo se limpian las cachés mientras la app está abierta.")
             Card {
                 VStack(alignment: .leading, spacing: 14) {
                     Toggle("Limpiar cachés automáticamente", isOn: $model.preferences.automatic)
@@ -661,35 +640,33 @@ struct MainWindow: View {
                         ForEach([1, 2, 3, 7], id: \.self) { Text($0 == 1 ? "1 día" : "\($0) días").tag($0) }
                     }.fixedSize()
                     Text("Categorías activas: \(CacheKind.allCases.filter(model.preferences.kinds.contains).map(\.title).joined(separator: ", "))")
-                        .font(.caption).foregroundStyle(mist)
-                    Button("Editar categorías") { model.page = .cleanup }.buttonStyle(ActionStyle())
+                        .font(.caption).foregroundStyle(secondaryInk)
+                    Button("Editar categorías") { model.page = .cleanup }.buttonStyle(.bordered)
                 }
             }.disabled(model.busy != nil)
             Card {
                 HStack(spacing: 12) {
-                    Image(systemName: "power").font(.system(size: 21)).foregroundStyle(mint)
+                    Image(systemName: "power").font(.system(size: 21)).foregroundStyle(accent)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Abrir al iniciar sesión").font(.headline)
-                        Text(model.loginDescription).font(.caption).foregroundStyle(mist)
+                        Text(model.loginDescription).font(.caption).foregroundStyle(secondaryInk)
                     }
                     Spacer()
                     Button(model.loginStatus == .enabled ? "Desactivar" : model.loginStatus == .requiresApproval ? "Abrir Ajustes" : "Activar") {
                         model.changeLogin()
-                    }.buttonStyle(ActionStyle())
+                    }.buttonStyle(.bordered)
                 }
             }
-            Card {
-                Label("La automatización actúa solo sobre las categorías de caché seleccionadas.", systemImage: "lock.shield")
-                    .font(.system(size: 12)).foregroundStyle(mist)
-            }
+            Text("Al cerrar la ventana, la app permanece en la barra de menús.")
+                .font(.system(size: 12)).foregroundStyle(secondaryInk)
         }
     }
 
     private var history: some View {
         Group {
-            heading("REGISTRO LOCAL", "Actividad", "Compara el espacio del volumen antes y después de cada operación.")
+            heading("Actividad", "Espacio disponible antes y después de cada operación.")
             if model.activity.isEmpty {
-                Card { Text("Aún no hay limpiezas registradas.").foregroundStyle(mist) }
+                Card { Text("Aún no hay limpiezas registradas.").foregroundStyle(secondaryInk) }
             }
             ForEach(model.activity) { event in
                 Card {
@@ -698,11 +675,11 @@ struct MainWindow: View {
                             Text(event.title).font(.headline)
                             Spacer()
                             Text(deltaText(event.difference)).font(.system(size: 16, weight: .semibold, design: .rounded))
-                                .foregroundStyle(event.difference > 0 ? mint : mist)
+                                .foregroundStyle(event.difference > 0 ? accent : secondaryInk)
                         }
-                        Text(event.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(mist)
+                        Text(event.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(secondaryInk)
                         Text("Espacio libre: \(quantity(event.before)) → \(quantity(event.after))  ·  \(event.done) procesados  ·  \(event.skipped) omitidos")
-                            .font(.system(size: 12)).foregroundStyle(mist)
+                            .font(.system(size: 12)).foregroundStyle(secondaryInk)
                         ForEach(event.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
                     }
                 }
@@ -739,7 +716,7 @@ struct AireDiscoApp: App {
 
     var body: some Scene {
         Window("Aire Disco", id: "aire-window") { AireRoot(model: model) }
-            .defaultSize(width: 1040, height: 715)
+            .defaultSize(width: 940, height: 630)
         MenuBarExtra {
             Text("\(quantity(model.space.free)) libres")
             if let busy = model.busy { Text(busy) }

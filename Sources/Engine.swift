@@ -34,7 +34,7 @@ enum CacheKind: String, CaseIterable, Codable, Identifiable, Sendable {
         case .browsers: return "Navegadores"
         case .apps: return "Aplicaciones"
         case .packages: return "Paquetes de desarrollo"
-        case .updates: return "Descargas de Google"
+        case .updates: return "Caché de Google"
         }
     }
     var icon: String {
