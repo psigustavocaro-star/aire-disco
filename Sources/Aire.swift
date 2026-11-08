@@ -499,6 +499,27 @@ struct MainWindow: View {
                         let logical = scan.groups.reduce(0) { $0 + $1.bytes }
                         Text("\(quantity(logical)) de caché detectada. El espacio recuperado se mide en el volumen.")
                             .font(.system(size: 11)).foregroundStyle(secondaryInk)
+                        if scan.groups.contains(where: { !$0.sources.isEmpty }) {
+                            DisclosureGroup("Detalle por aplicación o herramienta") {
+                                VStack(alignment: .leading, spacing: 9) {
+                                    ForEach(scan.groups.filter { !$0.sources.isEmpty }) { group in
+                                        Text(group.kind.title)
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(secondaryInk)
+                                        ForEach(group.sources) { source in
+                                            HStack {
+                                                Text(source.name)
+                                                Spacer()
+                                                Text(quantity(source.bytes)).monospacedDigit()
+                                            }
+                                            .font(.system(size: 12))
+                                        }
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
+                            .font(.system(size: 12))
+                        }
                     }
                 }
             }.disabled(model.busy != nil)

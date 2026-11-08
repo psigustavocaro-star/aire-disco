@@ -34,7 +34,7 @@ enum CacheKind: String, CaseIterable, Codable, Identifiable, Sendable {
         case .browsers: return "Navegadores"
         case .apps: return "Aplicaciones"
         case .packages: return "Paquetes de desarrollo"
-        case .updates: return "Caché de Google"
+        case .updates: return "Actualizaciones"
         }
     }
     var icon: String {
@@ -47,10 +47,10 @@ enum CacheKind: String, CaseIterable, Codable, Identifiable, Sendable {
     }
     var details: String {
         switch self {
-        case .browsers: return "Páginas y código en caché de Chrome y Firefox"
-        case .apps: return "Caché web de Codex, Notion, Spotify y Discord"
-        case .packages: return "Descargas regenerables de npm y pip"
-        case .updates: return "Paquetes de actualización, componentes y extensiones en caché"
+        case .browsers: return "Páginas y recursos temporales de navegación"
+        case .apps: return "Recursos web temporales de aplicaciones compatibles"
+        case .packages: return "Paquetes descargados por herramientas de desarrollo"
+        case .updates: return "Paquetes de actualización y componentes en caché"
         }
     }
 }
@@ -105,9 +105,22 @@ struct CacheFile: Sendable {
     let info: FileInfo
 }
 
+struct CacheSource: Identifiable, Sendable {
+    let name: String
+    let bytes: Int64
+    var id: String { name }
+}
+
+private struct CacheRoot {
+    let url: URL
+    let source: String
+    var verifiesCacheFormat = false
+}
+
 struct CacheGroup: Identifiable, Sendable {
     let kind: CacheKind
     let files: [CacheFile]
+    var sources: [CacheSource] = []
     var id: CacheKind { kind }
     var bytes: Int64 { files.reduce(0) { $0 + $1.info.allocated } }
 }
@@ -156,9 +169,14 @@ struct CacheScan: Sendable {
 struct Engine: Sendable {
     let home: URL
     private var fm: FileManager { FileManager.default }
+    private let applicationDirectories: [URL]
 
-    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, applicationDirectories: [URL]? = nil) {
         self.home = home.standardizedFileURL.resolvingSymlinksInPath()
+        self.applicationDirectories = applicationDirectories ?? [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            home.appendingPathComponent("Applications", isDirectory: true)
+        ]
     }
 
     var disk: DiskSpace { DiskSpace.read(at: home) }
@@ -168,35 +186,110 @@ struct Engine: Sendable {
         return lstat(url.path, &value) == 0 ? FileInfo(value) : nil
     }
 
-    func cacheRoots(_ kind: CacheKind) -> [URL] {
+    private func cacheRoots(_ kind: CacheKind) -> [CacheRoot] {
         let base = home.appendingPathComponent("Library/Caches")
         let support = home.appendingPathComponent("Library/Application Support")
+        func webCaches(_ profile: URL, source: String, includeGPU: Bool = false) -> [CacheRoot] {
+            let paths = ["Cache/Cache_Data", "Code Cache/js", "Code Cache/wasm"]
+                + (includeGPU ? ["GPUCache"] : [])
+            return paths.map { CacheRoot(url: profile.appendingPathComponent($0), source: source) }
+        }
+
+        let roots: [CacheRoot]
         switch kind {
         case .browsers:
-            let chrome = base.appendingPathComponent("Google/Chrome")
-            let firefox = base.appendingPathComponent("Firefox/Profiles")
-            return children(chrome).flatMap { profile in
-                ["Cache/Cache_Data", "Code Cache/js", "Code Cache/wasm", "GPUCache"].map {
-                    profile.appendingPathComponent($0)
+            let chromiumBrowsers = [
+                ("Google/Chrome", "Chrome"),
+                ("Chromium", "Chromium"),
+                ("Microsoft Edge", "Edge"),
+                ("BraveSoftware/Brave-Browser", "Brave"),
+                ("Vivaldi", "Vivaldi")
+            ]
+            roots = chromiumBrowsers.flatMap { directory, name in
+                children(base.appendingPathComponent(directory)).flatMap {
+                    webCaches($0, source: name, includeGPU: true)
                 }
-            } + children(firefox).map { $0.appendingPathComponent("cache2") }
+            } + children(base.appendingPathComponent("Firefox/Profiles")).map {
+                CacheRoot(url: $0.appendingPathComponent("cache2"), source: "Firefox")
+            }
         case .apps:
             let codexCache = base.appendingPathComponent("Codex")
             let codexSupport = support.appendingPathComponent("Codex")
             let codexProfiles = [codexCache.appendingPathComponent("Default"), codexCache.appendingPathComponent("codex-browser-app"), codexSupport]
-            let partitions = children(codexCache.appendingPathComponent("Default/Partitions")) + children(codexSupport.appendingPathComponent("Partitions"))
-            let profiles = codexProfiles + partitions + [support.appendingPathComponent("Notion/Partitions/notion"), support.appendingPathComponent("discord")]
-            return profiles.flatMap { folder in
-                ["Cache/Cache_Data", "Code Cache/js", "Code Cache/wasm"].map { folder.appendingPathComponent($0) }
-            } + [base.appendingPathComponent("com.spotify.client/Browser/Cache")]
+                + children(codexCache.appendingPathComponent("Default/Partitions"))
+                + children(codexSupport.appendingPathComponent("Partitions"))
+            let known = codexProfiles.flatMap { webCaches($0, source: "Codex") }
+                + webCaches(support.appendingPathComponent("Notion/Partitions/notion"), source: "Notion")
+                + webCaches(support.appendingPathComponent("discord"), source: "Discord")
+                + [CacheRoot(url: base.appendingPathComponent("com.spotify.client/Browser/Cache"), source: "Spotify")]
+            let detected = electronProfiles(cache: base, support: support).flatMap { profile, name in
+                webCaches(profile, source: name).compactMap { root -> CacheRoot? in
+                    let index = root.url.appendingPathComponent("index")
+                    guard let entry = info(index), hasChromiumCacheHeader(index, entry: entry) else { return nil }
+                    return CacheRoot(url: root.url, source: root.source, verifiesCacheFormat: true)
+                }
+            }
+            roots = known + detected
         case .packages:
-            return [home.appendingPathComponent(".npm/_cacache")] +
-            ["http", "http-v2", "wheels"].map { base.appendingPathComponent("pip/\($0)") }
+            roots = [CacheRoot(url: home.appendingPathComponent(".npm/_cacache"), source: "npm")]
+                + ["http", "http-v2", "wheels"].map {
+                    CacheRoot(url: base.appendingPathComponent("pip/\($0)"), source: "pip")
+                }
         case .updates:
-            return ["Google/GoogleUpdater/crx_cache", "Google/Chrome/component_crx_cache", "Google/Chrome/extensions_crx_cache"].map {
-                support.appendingPathComponent($0)
+            roots = ["Google/GoogleUpdater/crx_cache", "Google/Chrome/component_crx_cache", "Google/Chrome/extensions_crx_cache"].map {
+                CacheRoot(url: support.appendingPathComponent($0), source: "Google")
             }
         }
+
+        var seen = Set<[Substring]>()
+        return roots.filter { safePath($0.url) && seen.insert(components($0.url)).inserted }
+    }
+
+    private func electronProfiles(cache: URL, support: URL) -> [(URL, String)] {
+        let directories = [cache, support].flatMap(children)
+        let byName = Dictionary(grouping: directories, by: { $0.lastPathComponent.lowercased() })
+        var profiles: [(URL, String)] = []
+        for location in applicationDirectories {
+            let applications = (try? fm.contentsOfDirectory(at: location, includingPropertiesForKeys: nil,
+                                                             options: [.skipsHiddenFiles])) ?? []
+            for app in applications where app.pathExtension.lowercased() == "app" {
+                guard fm.fileExists(atPath: app.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path),
+                      let bundle = Bundle(url: app) else { continue }
+                let fileName = app.deletingPathExtension().lastPathComponent
+                let displayName = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+                let bundleName = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String
+                let identifier = bundle.bundleIdentifier ?? ""
+                let names = [fileName, displayName, bundleName].compactMap { $0 }
+                guard !([identifier] + names).contains(where: {
+                    let name = $0.lowercased()
+                    return name.contains("claude") || name.contains("anthropic")
+                }) else { continue }
+                let label = displayName ?? bundleName ?? fileName
+                for name in Set(names.map { $0.lowercased() }) {
+                    for directory in byName[name] ?? [] {
+                        profiles.append((directory, label))
+                        profiles.append(contentsOf: children(directory.appendingPathComponent("Partitions")).map { ($0, label) })
+                        let standardProfile = directory.appendingPathComponent("Default")
+                        profiles.append((standardProfile, label))
+                        profiles.append(contentsOf: children(standardProfile.appendingPathComponent("Partitions")).map { ($0, label) })
+                    }
+                }
+            }
+        }
+        return profiles
+    }
+
+    private func hasChromiumCacheHeader(_ url: URL, entry: FileInfo) -> Bool {
+        guard entry.regular, entry.local, entry.size >= 8, safePath(url) else { return false }
+        let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+        var current = stat()
+        guard fstat(descriptor, &current) == 0, FileInfo(current) == entry else { return false }
+        // Chromium's Simple Cache file header, little-endian on both Mac architectures.
+        var signature: UInt64 = 0
+        let length = withUnsafeMutableBytes(of: &signature) { read(descriptor, $0.baseAddress, $0.count) }
+        return length == 8 && UInt64(littleEndian: signature) == 0xfcfb6d1ba7725c30
     }
 
     func children(_ url: URL) -> [URL] {
@@ -246,15 +339,22 @@ struct Engine: Sendable {
         let cutoff = Date().timeIntervalSince1970 - age
         let groups = CacheKind.allCases.filter(kinds.contains).map { kind in
             var files: [CacheFile] = []
-            for root in Set(cacheRoots(kind)) {
-                walk(root, hidden: true) { path in
+            var sizes: [String: Int64] = [:]
+            for root in cacheRoots(kind) {
+                walk(root.url, hidden: true) { path in
                     if let file = info(path), file.regular, file.local, file.links == 1,
                         file.time < cutoff, file.allocated > 0 {
+                        if root.verifiesCacheFormat {
+                            guard path.lastPathComponent != "index",
+                                  hasChromiumCacheHeader(path, entry: file) else { return }
+                        }
                         files.append(CacheFile(url: path, info: file))
+                        sizes[root.source, default: 0] += file.allocated
                     }
                 }
             }
-            return CacheGroup(kind: kind, files: files)
+            let sources = sizes.map { CacheSource(name: $0.key, bytes: $0.value) }.sorted { $0.bytes > $1.bytes }
+            return CacheGroup(kind: kind, files: files, sources: sources)
         }
         var notes: [String] = []
         var found: [Installer] = []
@@ -334,7 +434,7 @@ struct Engine: Sendable {
     func cleanCaches(_ groups: [CacheGroup], title: String) -> Result {
         var result = Result(title: title, before: disk.free, after: 0)
         for group in groups {
-            let allowed = cacheRoots(group.kind).map { $0.standardizedFileURL.path.split(separator: "/") }
+            let allowed = cacheRoots(group.kind).map { components($0.url) }
             for file in group.files {
                 guard !Task.isCancelled else { break }
                 do {

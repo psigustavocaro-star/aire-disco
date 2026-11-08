@@ -10,7 +10,7 @@ Aplicación nativa para macOS que analiza cachés, revisa instaladores y optimiz
 
 ## Instalar
 
-1. Descarga `Aire-Disco-1.1-macOS.zip` desde **Releases** y descomprímelo.
+1. Descarga `Aire-Disco-1.2-macOS.zip` desde **Releases** y descomprímelo.
 2. Arrastra **Aire Disco.app** a **Aplicaciones** y ábrela.
 3. En **Limpieza**, elige categorías y pulsa **Analizar**. Revisa el resultado antes de pulsar **Limpiar cachés**.
 
@@ -23,7 +23,7 @@ La versión incluye `SHA256SUMS.txt`. Si descargas ese archivo junto con el ZIP,
 | Pantalla | Qué puedes hacer |
 | --- | --- |
 | **Resumen** | Ver el espacio libre y la capacidad del volumen de tu usuario. |
-| **Limpieza** | Analizar cachés conocidas de Chrome, Firefox, Spotify, Notion, Discord, Codex, npm y pip. Revisa aparte los instaladores detectados en Descargas y los restos de instalación de Codex. |
+| **Limpieza** | Analizar por categoría las cachés compatibles que existan en tu Mac. Abre el detalle para ver de dónde viene el espacio detectado. Los instaladores se revisan por separado. |
 | **Copias idénticas** | Elegir una carpeta de referencia y una de copias. Seleccionar los archivos que quieras optimizar tras verificar su contenido por SHA-256. |
 | **Automático** | Activar la limpieza cuando el disco baje de un umbral, con un intervalo mínimo y una antigüedad de caché configurables. |
 | **Actividad** | Consultar las 30 operaciones más recientes, el espacio libre antes y después y los archivos omitidos. |
@@ -32,7 +32,7 @@ Para usar la automatización, configura las categorías desde **Limpieza** y act
 
 ## Alcance de la limpieza
 
-- La automatización se limita a las ubicaciones de caché de las categorías activas.
+- La automatización se limita a las ubicaciones de caché de las categorías activas. El análisis incluye varios navegadores, paquetes de desarrollo, actualizaciones y cachés web de aplicaciones Electron detectadas en Aplicaciones que usan ubicaciones compatibles.
 - Los instaladores se presentan para selección manual. Su eliminación es definitiva y requiere confirmación en la app.
 - Para optimizar copias, elige dos carpetas distintas de tu usuario, en el mismo volumen APFS. La comparación omite archivos que solo están en la nube, enlaces múltiples, paquetes de aplicaciones y bibliotecas multimedia. Las dos rutas se conservan y las ediciones siguen siendo independientes. [Cómo funcionan los clones APFS](https://developer.apple.com/documentation/foundation/about-apple-file-system).
 - macOS puede pedir acceso a Descargas o a las carpetas que elijas. Los permisos se conceden desde macOS y el análisis de cachés sigue disponible aunque Descargas no esté accesible.

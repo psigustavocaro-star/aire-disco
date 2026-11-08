@@ -18,7 +18,8 @@ struct EngineCheck {
         let home = URL(fileURLWithPath: "/private/tmp/aire-check-" + UUID().uuidString)
         try fm.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: home) }
-        let e = Engine(home: home)
+        let applications = home.appendingPathComponent("Applications", isDirectory: true)
+        let e = Engine(home: home, applicationDirectories: [applications])
         let old = Date(timeIntervalSinceNow: -9 * 86400)
         func make(_ relative: String, bytes: Data, age: Date = old) throws -> URL {
             let file = home.appendingPathComponent(relative)
@@ -43,6 +44,42 @@ struct EngineCheck {
         try expect(!fm.fileExists(atPath: oldCache.path) && fm.fileExists(atPath: fresh.path))
         try expect(fm.fileExists(atPath: outside.path) && fm.fileExists(atPath: claude.path))
         print("Cachés: antigüedad, lista permitida, enlaces y separación de instaladores verificados")
+
+        func makeApp(_ name: String, identifier: String, electron: Bool = true) throws {
+            let plist = try PropertyListSerialization.data(
+                fromPropertyList: ["CFBundleName": name, "CFBundleIdentifier": identifier, "CFBundlePackageType": "APPL"],
+                format: .xml, options: 0
+            )
+            _ = try make("Applications/\(name).app/Contents/Info.plist", bytes: plist)
+            if electron {
+                try fm.createDirectory(at: applications.appendingPathComponent("\(name).app/Contents/Frameworks/Electron Framework.framework"),
+                                       withIntermediateDirectories: true)
+            }
+        }
+        try makeApp("Notas de prueba", identifier: "app.example.notes")
+        try makeApp("App nativa", identifier: "app.example.native", electron: false)
+        try makeApp("Asistente", identifier: "com.anthropic.example")
+        var cacheMagic = UInt64(0xfcfb6d1ba7725c30).littleEndian
+        let cacheData = withUnsafeBytes(of: &cacheMagic) { Data($0) } + Data(repeating: 5, count: 4096)
+        let cachePath = "Library/Application Support/Notas de prueba/Cache/Cache_Data/"
+        let indexFile = try make(cachePath + "index", bytes: cacheData)
+        let cacheEntry = try make(cachePath + "entrada", bytes: cacheData)
+        let ordinary = try make(cachePath + "documento", bytes: Data("archivo normal".utf8))
+        let storage = try make("Library/Application Support/Notas de prueba/Local Storage/registro", bytes: cacheData)
+        var excluded = [indexFile, ordinary, storage]
+        for name in ["App nativa", "Asistente", "App sin instalar"] {
+            _ = try make("Library/Application Support/\(name)/Cache/Cache_Data/index", bytes: cacheData)
+            excluded.append(try make("Library/Application Support/\(name)/Cache/Cache_Data/entrada", bytes: cacheData))
+        }
+        let brave = try make("Library/Caches/BraveSoftware/Brave-Browser/Default/Cache/Cache_Data/archivo", bytes: cacheData)
+        let universal = e.scanCaches([.apps, .browsers], age: 86400, installers: false)
+        try expect(universal.groups.first { $0.kind == .apps }?.sources.map(\.name) == ["Notas de prueba"])
+        try expect(universal.groups.first { $0.kind == .browsers }?.sources.map(\.name) == ["Brave"])
+        try expect(Set(universal.groups.flatMap(\.files).map(\.url)) == [cacheEntry, brave])
+        let universalResult = e.cleanCaches(universal.groups, title: "Prueba de detección")
+        try expect(universalResult.done == 2 && universalResult.skipped == 0)
+        try expect(excluded.allSatisfy { fm.fileExists(atPath: $0.path) })
+        print("Detección: solo se incluyen cachés compatibles y se conserva el almacenamiento local")
 
         let originalData = Data((0..<2_100_000).map { UInt8(truncatingIfNeeded: $0 % 239) })
         let source = try make("Referencia/Original.pdf", bytes: originalData)
